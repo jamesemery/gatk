@@ -18,6 +18,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A miscellaneous collection of utilities for working with reads, headers, etc.
@@ -322,6 +324,64 @@ public final class ReadUtils {
              ! Character.isLetterOrDigit(attributeName.charAt(1)) ) {
 
             throw new IllegalArgumentException("Read attribute " + attributeName + " invalid: attribute names must be non-null two-character Strings matching the pattern /[A-Za-z][A-Za-z0-9]/");
+        }
+    }
+
+    /**
+     * Encapsulates a integer attribute into an {@link OptionalInt} instance.
+     * @param read the input read.
+     * @param tag the attribute tag name.
+     * @throws IllegalArgumentException if {@code read} or {@code tag} are {@code null}.
+     * @throws GATKException.ReadAttributeTypeMismatch if the value provided for that attribute is not an integer.
+     * @return never {@code null}, but perhaps empty indicating that no value was provided for this attribute.
+     */
+    public static OptionalInt getOptionalIntAttribute(final SAMRecord read, final String tag) {
+        Utils.nonNull(read);
+        Utils.nonNull(tag);
+        final Object obj = read.getAttribute(tag);
+        if (obj == null) {
+            return OptionalInt.empty();
+        } else if (obj instanceof Number) {
+            final Number num = (Number) obj;
+            if (num.intValue() == num.doubleValue()) {
+                return OptionalInt.of(num.intValue());
+            } else {
+                throw new GATKException.ReadAttributeTypeMismatch(String.format("no an integer value for record %s @ %s and tag %s: %s",
+                        read.getReadName(), locationString(read), tag, obj));
+            }
+        } else {
+            final String str = "" + obj;
+            try {
+                return OptionalInt.of(Integer.parseInt(str));
+            } catch (final NumberFormatException ex) {
+                throw new GATKException.ReadAttributeTypeMismatch(String.format("no an integer value for record %s @ %s and tag %s: %s",
+                        read.getReadName(), locationString(read), tag, obj), ex);
+            }
+        }
+    }
+
+    /**
+     * Encapsulates a integer attribute into an {@link OptionalInt} instance.
+     * @param read the input read.
+     * @param tag the attribute tag name.
+     * @throws IllegalArgumentException if {@code read} or {@code tag} are {@code null}.
+     * @throws GATKException.ReadAttributeTypeMismatch if the value provided for that attribute is not an integer.
+     * @return never {@code null}, but perhaps empty indicating that no value was provided for this attribute.
+     */
+    public static OptionalInt getOptionalIntAttribute(final GATKRead read, final String tag) {
+        Utils.nonNull(read);
+        Utils.nonNull(tag);
+        final Integer obj = read.getAttributeAsInteger(tag);
+        return obj == null ? OptionalInt.empty() : OptionalInt.of(obj);
+    }
+
+    private static String locationString(final SAMRecord read) {
+        final String refName = read.getReferenceName();
+        if (refName == null || SAMRecord.NO_ALIGNMENT_REFERENCE_NAME.equals(refName)) {
+            return SAMRecord.NO_ALIGNMENT_REFERENCE_NAME;
+        } else {
+            final int start = read.getAlignmentStart();
+            return refName + ":" + start;
         }
     }
 

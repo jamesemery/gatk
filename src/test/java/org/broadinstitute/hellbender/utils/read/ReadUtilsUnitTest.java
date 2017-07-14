@@ -3,14 +3,9 @@ package org.broadinstitute.hellbender.utils.read;
 import com.google.api.services.genomics.model.LinearAlignment;
 import com.google.api.services.genomics.model.Position;
 import com.google.api.services.genomics.model.Read;
-import htsjdk.samtools.SamFiles;
-import htsjdk.samtools.SAMFileHeader;
-import htsjdk.samtools.SAMFileWriter;
-import htsjdk.samtools.SamReader;
-import htsjdk.samtools.SamReaderFactory;
-import htsjdk.samtools.SAMRecord;
-import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.*;
 import htsjdk.samtools.reference.IndexedFastaSequenceFile;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.broadinstitute.hellbender.utils.BaseUtils;
@@ -23,6 +18,7 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 
 public final class ReadUtilsUnitTest extends BaseTest {
@@ -614,6 +610,54 @@ public final class ReadUtilsUnitTest extends BaseTest {
                     assumeSorted,
                     "test"
             );
+    }
+
+    @Test
+    public void getOptionalIntAttributeOnSAMRecord() {
+        final SAMRecord record = ArtificialReadUtils.createArtificialSAMRecord(
+                new Cigar(Collections.singletonList(new CigarElement(100, CigarOperator.M))));
+        Assert.assertFalse(ReadUtils.getOptionalIntAttribute(record, "AS").isPresent());
+        record.setAttribute("AS", -10);
+        Assert.assertEquals(ReadUtils.getOptionalIntAttribute(record, "AS").orElse(-1), -10);
+        record.setAttribute("AS", "-20");
+        Assert.assertEquals(ReadUtils.getOptionalIntAttribute(record, "AS").orElse(-1), -20);
+        record.setAttribute("AS", 10.213f);
+        try {
+            ReadUtils.getOptionalIntAttribute(record, "AS").isPresent();
+            Assert.fail("expected and exception");
+        } catch (final Throwable ex) {
+            Assert.assertTrue(ex instanceof GATKException.ReadAttributeTypeMismatch, "wrong ex class: " + ex.getClass());
+        }
+        record.setAttribute("AS", "10.213");
+        try {
+            ReadUtils.getOptionalIntAttribute(record, "AS").isPresent();
+            Assert.fail("expected and exception");
+        } catch (final Throwable ex) {
+            Assert.assertTrue(ex instanceof GATKException.ReadAttributeTypeMismatch, "wrong ex class: " + ex.getClass());
+        }
+        record.setAttribute("AS", null);
+        Assert.assertFalse(ReadUtils.getOptionalIntAttribute(record, "AS").isPresent());
+    }
+
+    @Test
+    public void getOptionalIntAttributeOnGATKRead() {
+        final SAMRecord record = ArtificialReadUtils.createArtificialSAMRecord(
+                new Cigar(Collections.singletonList(new CigarElement(100, CigarOperator.M))));
+        final GATKRead read = new SAMRecordToGATKReadAdapter(record);
+        Assert.assertFalse(ReadUtils.getOptionalIntAttribute(read, "AS").isPresent());
+        read.setAttribute("AS", -10);
+        Assert.assertEquals(ReadUtils.getOptionalIntAttribute(read, "AS").orElse(-1), -10);
+        read.setAttribute("AS", "-20");
+        Assert.assertEquals(ReadUtils.getOptionalIntAttribute(record, "AS").orElse(-1), -20);
+        read.setAttribute("AS", "10.213");
+        try {
+            ReadUtils.getOptionalIntAttribute(read, "AS").isPresent();
+            Assert.fail("expected and exception");
+        } catch (final Throwable ex) {
+            Assert.assertTrue(ex instanceof GATKException.ReadAttributeTypeMismatch, "wrong ex class: " + ex.getClass());
+        }
+        read.clearAttribute("AS");
+        Assert.assertFalse(ReadUtils.getOptionalIntAttribute(read, "AS").isPresent());
     }
 
 }

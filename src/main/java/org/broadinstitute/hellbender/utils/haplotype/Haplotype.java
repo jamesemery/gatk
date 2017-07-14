@@ -1,8 +1,6 @@
 package org.broadinstitute.hellbender.utils.haplotype;
 
-import htsjdk.samtools.Cigar;
-import htsjdk.samtools.CigarElement;
-import htsjdk.samtools.CigarOperator;
+import htsjdk.samtools.*;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.Allele;
 import org.apache.commons.lang3.ArrayUtils;
@@ -10,9 +8,12 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.read.AlignmentUtils;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
+import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
+import org.seqdoop.hadoop_bam.SAMFormat;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.function.Consumer;
 
 public final class Haplotype extends Allele {
     private static final long serialVersionUID = 1L;
@@ -236,5 +237,58 @@ public final class Haplotype extends Allele {
         return genomeLocation;
     }
 
+    /**
+     * Composes a {@link SAMRecord} that contains the sequence and mapping information in the haplotype.
+     *
+     * @param header the header for the output sam-record file associated with the returned record.
+     * @param name the name of the resulting SAMRecord.
+     * @param extra additional conversion code, can be {@code null} indicatting that there is no need for additional
+     *              conversion.
+     *
+     * @throws IllegalArgumentException if {@code header} or {@code name} are {@code null}.
+     * @return never {@code null}.
+     */
+    public SAMRecord convertToSAMRecord(final SAMFileHeader header, final String name, final Consumer<SAMRecord> extra) {
+        Utils.nonNull(header, "header cannot be null");
+        Utils.nonNull(name);
 
+        final Locatable loc = this.getLocation();
+        final Cigar cigar = this.getCigar();
+        final Locatable location = this.getLocation();
+        final boolean mapped = cigar != null && !cigar.isEmpty() && location != null && location.getContig() != null;
+
+        final SAMRecord record = new SAMRecord(header);
+        record.setReadName(name);
+        record.setReadBases(getBases());
+        record.setReadUnmappedFlag(!mapped);
+        record.setReadPairedFlag(false);
+        record.setReadNegativeStrandFlag(false);
+        if (mapped) {
+            record.setReferenceName(loc.getContig());
+            record.setAlignmentStart(location.getStart());
+            record.setCigar(cigar);
+        }
+        if (extra != null) {
+            extra.accept(record);
+        }
+        return record;
+    }
+
+    /**
+     * Converts the haplotype into a {@link SAMRecord} without extra conversion code.
+     * <p>
+     * This call is equivalent to {@code {@link #convertToSAMRecord(SAMFileHeader, String, Consumer) convertToSAMRecord(header, name, null)}}.
+     * </p>
+     * @see #convertToSAMRecord(SAMFileHeader, String, Consumer)
+     *
+     * @param header the header for the output sam-record file associated with the returned record.
+     * @param name the name of the resulting SAMRecord.
+     *
+     * @throws IllegalArgumentException if {@code header} or {@code name} are {@code null}.
+     *
+     * @return never {@code null}.
+     */
+    public SAMRecord convertToSAMRecord(final SAMFileHeader header, final String name) {
+        return convertToSAMRecord(header, name, null);
+    }
 }
