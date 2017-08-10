@@ -22,8 +22,35 @@ import java.util.stream.Collectors;
  * Given identified pair of breakpoints for a simple SV and its supportive evidence, i.e. chimeric alignments,
  * produce an annotated {@link VariantContext}.
  */
-class AnnotatedVariantProducer implements Serializable {
+public class AnnotatedVariantProducer implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    public static Iterator<VariantContext> produceMultipleAnnotatedVcFromNovelAdjacency(final NovelAdjacencyReferenceLocations novelAdjacencyReferenceLocations,
+                                                                                        final Iterable<SvType> inferredType,
+                                                                                        final Iterable<ChimericAlignment> contigAlignments,
+                                                                                        final Broadcast<ReferenceMultiSource> broadcastReference)
+            throws IOException {
+
+        Utils.validateArg(inferredType.iterator().hasNext(),
+                "Input novel adjacency doesn't have any inferred type: \n" +
+                        Utils.stream(contigAlignments).map(ChimericAlignment::onErrStringRep).collect(Collectors.toList()));
+
+        final Iterator<SvType> it = inferredType.iterator();
+        final VariantContext record =
+                produceAnnotatedVcFromInferredTypeAndRefLocations(novelAdjacencyReferenceLocations.leftJustifiedLeftRefLoc, -1,
+                        novelAdjacencyReferenceLocations.complication, it.next(), contigAlignments, broadcastReference);
+
+        final List<VariantContext> result = new ArrayList<>();
+        result.add(record);
+        // hack for now because up to this point inferredType would have max of 2 only
+        while (it.hasNext()) {
+            final VariantContext mateRecord =
+                    produceAnnotatedVcFromInferredTypeAndRefLocations(novelAdjacencyReferenceLocations.leftJustifiedRightRefLoc, -1,
+                            novelAdjacencyReferenceLocations.complication, it.next(), contigAlignments, broadcastReference);
+            result.add(mateRecord);
+        }
+        return result.iterator();
+    }
 
     // TODO: 12/12/16 does not handle translocation yet
     /**
@@ -35,7 +62,6 @@ class AnnotatedVariantProducer implements Serializable {
      * @param inferredType                      inferred type of variant
      * @param contigAlignments                  chimeric alignments from contigs used for generating this novel adjacency
      * @param broadcastReference                broadcasted reference
-     *
      * @throws IOException                      due to read operations on the reference
      */
     static VariantContext produceAnnotatedVcFromInferredTypeAndRefLocations(final SimpleInterval refLoc, final int end,
@@ -46,7 +72,6 @@ class AnnotatedVariantProducer implements Serializable {
             throws IOException {
 
         final int applicableEnd = end < 0 ? refLoc.getEnd() : end; // BND formatted variant shouldn't have END
-
         // basic information and attributes
         final VariantContextBuilder vcBuilder = new VariantContextBuilder()
                 .chr(refLoc.getContig()).start(refLoc.getStart()).stop(applicableEnd)
