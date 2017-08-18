@@ -8,5 +8,5 @@ repoName=${IMAGE_NAME:0:tagStart-1}
 DATE=`date +%Y-%m-%d`
 
 # Tag and push image for each additional tag
-docker tag $IMAGE_NAME ${repoName}:${$DATE}
-docker push ${repoName}:${$DATE}
+docker tag $IMAGE_NAME ${repoName}:${DATE}
+docker push ${repoName}:${DATE}
